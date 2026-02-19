@@ -919,20 +919,40 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: `Crew **${crewName}** already exists!`, ephemeral: true });
           }
           try {
+            // Create role for crew
+            const crewRole = await guild.roles.create({
+              name: crewName,
+              color: '#FF6600',
+              reason: `Auto-created role for crew: ${crewName}`
+            });
+            
             const crewCategory = guild.channels.cache.find(c => c.name === 'crews' && c.isCategory());
             const newChannel = await guild.channels.create({
               name: crewName.toLowerCase().replace(/\s+/g, '-'),
               type: 0, // Text channel
               parent: crewCategory?.id,
-              topic: `${crewName} Racing Crew`
+              topic: `${crewName} Racing Crew`,
+              permissionOverwrites: [
+                {
+                  id: guild.roles.everyone.id,
+                  deny: ['ViewChannel']
+                },
+                {
+                  id: crewRole.id,
+                  allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
+                }
+              ]
             });
-            userCrews.set(crewName, { name: crewName, captain: interaction.user.id, members: [interaction.user.id], channelId: newChannel.id });
+            
+            // Assign role to captain
+            await interaction.member.roles.add(crewRole).catch(err => console.log(`Could not assign role: ${err}`));
+            
+            userCrews.set(crewName, { name: crewName, captain: interaction.user.id, members: [interaction.user.id], channelId: newChannel.id, roleId: crewRole.id });
             userProfile.crew = crewName;
-            await interaction.reply({ content: `✅ Created crew **${crewName}**! You are the captain. Team channel: ${newChannel}`, ephemeral: true });
+            await interaction.reply({ content: `✅ Created crew **${crewName}**! You are the captain. Team channel: ${newChannel}\n📋 Role assigned: <@&${crewRole.id}>`, ephemeral: true });
           } catch (error) {
-            userCrews.set(crewName, { name: crewName, captain: interaction.user.id, members: [interaction.user.id], channelId: null });
-            userProfile.crew = crewName;
-            await interaction.reply({ content: `✅ Created crew **${crewName}**! You are the captain. (Channel creation requires category named "crews")`, ephemeral: true });
+            console.error(`Error creating crew: ${error}`);
+            await interaction.reply({ content: `❌ Failed to create crew. Error: ${error.message}`, ephemeral: true });
           }
         } else if (crewAction === 'join') {
           if (!userCrews.has(crewName)) {
@@ -942,10 +962,23 @@ client.on('interactionCreate', async interaction => {
           if (crew.members.includes(interaction.user.id)) {
             return interaction.reply({ content: `You're already in crew **${crewName}**!`, ephemeral: true });
           }
-          crew.members.push(interaction.user.id);
-          userProfile.crew = crewName;
-          const crewMsg = crew.channelId ? ` Access crew channel <#${crew.channelId}>!` : '';
-          await interaction.reply({ content: `✅ Joined crew **${crewName}**!${crewMsg}`, ephemeral: true });
+          
+          try {
+            // Assign role to member
+            if (crew.roleId) {
+              const role = guild.roles.cache.get(crew.roleId);
+              if (role) {
+                await interaction.member.roles.add(role);
+              }
+            }
+            crew.members.push(interaction.user.id);
+            userProfile.crew = crewName;
+            const crewMsg = crew.channelId ? ` Access crew channel <#${crew.channelId}>!` : '';
+            await interaction.reply({ content: `✅ Joined crew **${crewName}**!${crewMsg}`, ephemeral: true });
+          } catch (error) {
+            console.error(`Error joining crew: ${error}`);
+            await interaction.reply({ content: `❌ Failed to join crew. Error: ${error.message}`, ephemeral: true });
+          }
         }
         break;
 
