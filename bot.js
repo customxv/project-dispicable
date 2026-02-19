@@ -919,40 +919,48 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: `Crew **${crewName}** already exists!`, ephemeral: true });
           }
           try {
-            // Create role for crew
+            // Create role for crew first
             const crewRole = await guild.roles.create({
               name: crewName,
               color: '#FF6600',
               reason: `Auto-created role for crew: ${crewName}`
             });
             
+            console.log(`Created role: ${crewRole.name} with ID: ${crewRole.id}`);
+            
             const crewCategory = guild.channels.cache.find(c => c.name === 'crews' && c.isCategory());
+            
+            // Create channel with proper permissions
             const newChannel = await guild.channels.create({
               name: crewName.toLowerCase().replace(/\s+/g, '-'),
               type: 0, // Text channel
               parent: crewCategory?.id,
-              topic: `${crewName} Racing Crew`,
-              permissionOverwrites: [
-                {
-                  id: guild.roles.everyone.id,
-                  deny: ['ViewChannel']
-                },
-                {
-                  id: crewRole.id,
-                  allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
-                }
-              ]
+              topic: `${crewName} Racing Crew`
             });
             
+            // Set permissions: deny everyone, allow role
+            await newChannel.permissionOverwrites.set([
+              {
+                id: guild.roles.everyone.id,
+                deny: [PermissionFlagsBits.ViewChannel]
+              },
+              {
+                id: crewRole.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
+              }
+            ]);
+            
+            console.log(`Set permissions for channel ${newChannel.name}`);
+            
             // Assign role to captain
-            await interaction.member.roles.add(crewRole).catch(err => console.log(`Could not assign role: ${err}`));
+            await interaction.member.roles.add(crewRole);
             
             userCrews.set(crewName, { name: crewName, captain: interaction.user.id, members: [interaction.user.id], channelId: newChannel.id, roleId: crewRole.id });
             userProfile.crew = crewName;
-            await interaction.reply({ content: `✅ Created crew **${crewName}**! You are the captain. Team channel: ${newChannel}\n📋 Role assigned: <@&${crewRole.id}>`, ephemeral: true });
+            await interaction.reply({ content: `✅ Created crew **${crewName}**!\n🔐 Private channel: ${newChannel}\n👥 Role: <@&${crewRole.id}>`, ephemeral: true });
           } catch (error) {
             console.error(`Error creating crew: ${error}`);
-            await interaction.reply({ content: `❌ Failed to create crew. Error: ${error.message}`, ephemeral: true });
+            await interaction.reply({ content: `❌ Failed to create crew: ${error.message}`, ephemeral: true });
           }
         } else if (crewAction === 'join') {
           if (!userCrews.has(crewName)) {
@@ -969,6 +977,8 @@ client.on('interactionCreate', async interaction => {
               const role = guild.roles.cache.get(crew.roleId);
               if (role) {
                 await interaction.member.roles.add(role);
+              } else {
+                return interaction.reply({ content: `❌ Crew role not found. Contact a mod.`, ephemeral: true });
               }
             }
             crew.members.push(interaction.user.id);
@@ -977,7 +987,7 @@ client.on('interactionCreate', async interaction => {
             await interaction.reply({ content: `✅ Joined crew **${crewName}**!${crewMsg}`, ephemeral: true });
           } catch (error) {
             console.error(`Error joining crew: ${error}`);
-            await interaction.reply({ content: `❌ Failed to join crew. Error: ${error.message}`, ephemeral: true });
+            await interaction.reply({ content: `❌ Failed to join crew: ${error.message}`, ephemeral: true });
           }
         }
         break;
