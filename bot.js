@@ -288,6 +288,14 @@ client.on('interactionCreate', async interaction => {
       if (targetMember && targetMember.roles.highest.position >= member.roles.highest.position) {
         return interaction.reply({ content: 'You cannot perform actions on users with equal or higher roles.', ephemeral: true });
       }
+    }
+  }
+
+  try {
+    switch (commandName) {
+      case 'kick':
+        const kickUser = interaction.options.getUser('user');
+        const kickReason = interaction.options.getString('reason') || 'No reason provided';
         const kickMember = await guild.members.fetch(kickUser.id);
         await kickMember.kick(kickReason);
         await sendModerationDM(kickUser, 'You have been kicked', kickReason);
